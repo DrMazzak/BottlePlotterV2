@@ -4,11 +4,11 @@ Offical HomePage https://bottleplotter.cz
 Blog post describing its creation https://vgnotepad.blogspot.com/2024/04/bottle-plotter.html
 
 ## SW stack
--Inkscape
--SVG file
--SVG to GCODE
--CNCjs
--GRBL
+- Inkscape
+- SVG file
+- SVG to GCODE
+- CNCjs
+- GRBL
 
 ## GRBL config
 >$0=10 (Step pulse time, microseconds)
