@@ -3,12 +3,21 @@ Pen Plotter for Bottles
 Offical HomePage https://bottleplotter.cz
 Blog post describing its creation https://vgnotepad.blogspot.com/2024/04/bottle-plotter.html
 
+## Printed parts
+All printed parts are designed to be printed without support on draft 0.3mm layer setting PLA with 30% infill.
+
 ## SW stack
 - Inkscape
 - SVG file
 - SVG to GCODE (Mine very pre-Aplha on https://bottleslicer.gaman.cz)
 - CNCjs
 - GRBL
+
+## TBD
+- Test some proper GCODE generator
+- Find some better electronics board
+- Better screw adapters
+- More optimizations of printed parts for less material and print time
 
 ## GRBL config
 >$0=10 (Step pulse time, microseconds)
