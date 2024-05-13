@@ -7,6 +7,13 @@ Blog post describing its creation https://vgnotepad.blogspot.com/2024/04/bottle-
 
 ![MakerFair24 Prague](https://bottleplotter.cz/mf24.jpg)
 
+## Getting started
+- Start by ordering all neccessary part needed for the build. Use parts list for reference
+- You can in paralel start with printing all printed parts
+- When you have all the parts start the assembly process
+- Upload GRBL firmware onto Arduino
+- Modify GRBL config to be the same as the reference on github
+- Try to home your bottle plotter, be ready to turn it of in case of crash
 
 ## Manufacturing resources
 - 3D Model https://cad.onshape.com/documents/39d12f9046f30a3a8d27d3a6/w/22b7987c4c49474e20d7ab2c/e/e2aa020f57ba51d7f6ca55f8?renderMode=0&uiState=6641cd91d067751e5ce12537
