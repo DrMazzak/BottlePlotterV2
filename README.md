@@ -3,6 +3,10 @@ Pen Plotter for Bottles
 Offical HomePage https://bottleplotter.cz
 Blog post describing its creation https://vgnotepad.blogspot.com/2024/04/bottle-plotter.html
 
+## Manufacturing resources
+- 3D Model https://cad.onshape.com/documents/39d12f9046f30a3a8d27d3a6/w/22b7987c4c49474e20d7ab2c/e/e2aa020f57ba51d7f6ca55f8?renderMode=0&uiState=6641cd91d067751e5ce12537
+- Parts list https://docs.google.com/spreadsheets/d/1IbpUXygSXaxqdkgz3Y6rmIXEAm9HOfCtqmNR5Q4xavQ/edit?usp=sharing
+
 ## Printed parts
 All printed parts are designed to be printed without support on draft 0.3mm layer setting PLA with 30% infill.
 
