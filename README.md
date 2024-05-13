@@ -6,7 +6,7 @@ Blog post describing its creation https://vgnotepad.blogspot.com/2024/04/bottle-
 ## SW stack
 - Inkscape
 - SVG file
-- SVG to GCODE
+- SVG to GCODE (Mine very pre-Aplha on https://bottleslicer.gaman.cz)
 - CNCjs
 - GRBL
 
