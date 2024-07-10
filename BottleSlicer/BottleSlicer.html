@@ -1,0 +1,673 @@
+<style>
+  /* text {
+    font-size:5px;
+  } */
+
+</style>
+
+<div id="svgContainer"></div>
+
+
+<input type="file" id="file-selector"> Choose SVG file</input>
+<button type="button" name="button" onclick="generateGcodeAndSave()">Generate G-Code</button>
+
+<hr>
+<h2 id="status">Status</h2>
+
+<label for="presets">Select preset:</label>
+<select onchange="updatePreset(event)" id="presetList" name="preset">
+  <option value="Corel">Corel</option>
+  <option value="Inkscape">Inkscape</option>
+</select>
+<br>
+
+Scale
+<input type="number" onchange="changeParameters(event)" name="scale" id="scaleInput" value=""><br>
+Path Division
+<input type="number" onchange="changeParameters(event)" name="pathDiv" id="pathDivInput" value=""><br>
+Y Shift
+<input type="number" onchange="changeParameters(event)" name="yShift" id="yShiftInput" value="">mm<br>
+Z Clearance
+<input type="number" onchange="changeParameters(event)" name="zClearance" id="zClearanceInput" value="">mm<br>
+Z Cut Depth
+<input type="number" onchange="changeParameters(event)" name="zCutDepth" id="zCutDepthInput" value="">mm<br>
+Feed Rate
+<input type="number" onchange="changeParameters(event)" name="feedRate" id="feedRateInput" value=""><br><br>
+<div>
+  <input type="checkbox" onchange="udpateCheckboxParam(event)" id="useOptimizerInput" name="useOptimizer" checked />
+  <label for="useOptimizer">Use Path Optimizer</label>
+</div>
+<div>
+  <input type="checkbox" onchange="udpateCheckboxParam(event)" id="showOptDebugInput" name="showOptDebug" checked />
+  <label for="showOptDebug">Show Optimizer Nodes</label>
+</div>
+<div>
+  <input type="checkbox" onchange="udpateCheckboxParam(event)" id="showGpointsInput" name="showGpoints" checked />
+  <label for="showGpoints">Show Gcode Nodes</label>
+</div>
+
+
+
+<script>
+
+  var fileName = "";
+  var statusLabel = document.getElementById("status");
+
+  var labelWidthmm = 235;
+  var labelHeightmm = 150;
+
+  const useOptimizer = false;
+  const showOptDebug = true;
+
+  const showGpoints = true;
+
+  var opts = {
+    scale : 1000,
+    zClearance : 4,
+    pathDiv : 2,
+    zCutDepth : -3,
+    feedRate : 4000,
+    yShift : 0
+  }
+
+  var pathsOrder = [];
+
+  updateParametrInputs();
+
+  function generateGcodeAndSave() {
+
+    const gcode = generateGcode();
+
+    saveData(gcode, fileName + ".gcode");
+
+  }
+
+  var saveData = (function () {
+      var a = document.createElement("a");
+      document.body.appendChild(a);
+      a.style = "display: none";
+      return function (data, fileName) {
+              blob = new Blob([data], {type: "octet/stream"}),
+              url = window.URL.createObjectURL(blob);
+          a.href = url;
+          a.download = fileName;
+          a.click();
+          window.URL.revokeObjectURL(url);
+      };
+  }());
+
+  function getBasicSVGinfo () {
+    const svgCont = document.getElementsByTagName("svg")[0];
+
+    const bottleRatio = labelHeightmm/labelWidthmm;
+
+    console.log("Basic SVG info")
+    console.dir(svgCont);
+    console.dir(svgCont.getBBox());
+    console.dir(svgCont.viewBox);
+
+    console.log("Scale W");
+    console.log(svgCont.viewBox.baseVal.width/labelWidthmm);
+    
+    console.log("Scale H");
+    console.log(svgCont.viewBox.baseVal.height/labelHeightmm);
+
+    console.log("Number of Paths");
+    console.log(document.getElementsByTagName("path").length);
+    
+    console.log("Number of Lines");
+    console.log(document.getElementsByTagName("line").length);
+
+
+    var svgWidth = svgCont.viewBox.baseVal.width;
+    var svgHeight = svgCont.viewBox.baseVal.height;
+
+    if (svgWidth == 0) {
+      svgWidth = svgCont.getBBox().width;
+    }
+
+    if (svgHeight == 0) {
+      svgHeight = svgCont.getBBox().height;
+    }
+
+    const svgRatio = svgHeight / svgWidth;
+
+    if (svgCont.viewBox.baseVal.width/labelWidthmm !== svgCont.viewBox.baseVal.height/labelHeightmm) {
+      console.log("Scales does not match check your size of file it should be W:"+labelWidthmm+"mm H:"+labelHeightmm+"mm");
+    }
+
+    console.log("Bottle Ratio");
+    console.log(labelHeightmm/labelWidthmm);
+
+    console.log("Picture Ratio");
+    console.log(svgCont.viewBox.baseVal.height/svgCont.viewBox.baseVal.width);
+
+    // Update scale
+    if ( svgRatio <= bottleRatio ) {
+      
+      console.log("using Width for scale");
+      opts.scale = svgWidth/labelWidthmm;
+
+    } else {
+
+      console.log("using Height for scale");
+      opts.scale = svgHeight/labelHeightmm; 
+
+    }
+    updateParametrInputs();
+    // console.dir(svgCont.offsetWidth);
+    // console.dir(svgCont.offsetHeigth);
+      
+
+  }
+
+  function analyzePaths() {
+
+      var pathsList = [];
+      var startPoints = [];
+      var endPoints = [];
+
+      var paths = document.getElementsByTagName("path");
+      
+      if (paths.length == 0) {
+        paths = document.getElementsByTagName("line");
+      }
+
+      const svgCont = document.getElementsByTagName("svg")[0];
+
+      var svgns = "http://www.w3.org/2000/svg";
+      var container = document.getElementById( 'cont' );
+
+      console.dir(paths);
+
+      for (var i = 0; i < paths.length; i++) {
+
+        const path = paths[i];
+
+        const pointRadius = 0.5 * opts.scale;
+        const textSize = 3;
+
+        var parentTransformation = false;
+
+        if ( path.parentElement.hasAttribute("transform") ) {
+
+          parentTransformation = path.parentElement.transform.animVal[0].matrix;
+
+        }
+                
+        console.log(parentTransformation);
+
+        pathsList.push( [ transformPoint( path.getPointAtLength(0), parentTransformation ),  transformPoint( path.getPointAtLength( path.getTotalLength() ), parentTransformation ) ] );
+
+        startPoints.push(pathsList[i][0]);
+        startPoints[i]["pathIndex"] = i;
+
+        endPoints.push(pathsList[i][1]);
+
+        if (showOptDebug) {
+
+          var circle = document.createElementNS(svgns, 'circle');
+          circle.setAttributeNS(null, 'cx', pathsList[i][0].x);
+          circle.setAttributeNS(null, 'cy', pathsList[i][0].y);
+          circle.setAttributeNS(null, 'r', pointRadius);
+          circle.setAttributeNS(null, 'style', 'fill: red; stroke: none; stroke-width: 1px;' );
+          svgCont.appendChild(circle);
+          
+          var circle = document.createElementNS(svgns, 'circle');
+          circle.setAttributeNS(null, 'cx', pathsList[i][1].x);
+          circle.setAttributeNS(null, 'cy', pathsList[i][1].y);
+          circle.setAttributeNS(null, 'r', pointRadius);
+          circle.setAttributeNS(null, 'style', 'fill: blue; stroke: none; stroke-width: 1px;' );
+          svgCont.appendChild(circle);
+          
+          var text = document.createElementNS(svgns, 'text');
+          text.setAttributeNS(null, 'x', pathsList[i][0].x);
+          text.setAttributeNS(null, 'y', pathsList[i][0].y);
+          text.setAttributeNS(null, 'style', "font-size:"+ textSize * opts.scale + "px");
+          text.textContent = i + "s";
+          svgCont.appendChild(text);
+          
+          var text = document.createElementNS(svgns, 'text');
+          text.setAttributeNS(null, 'x', pathsList[i][1].x);
+          text.setAttributeNS(null, 'y', pathsList[i][1].y);
+          text.setAttributeNS(null, 'style', "font-size:"+ textSize * opts.scale + "px");
+          text.textContent = i + "e";
+          svgCont.appendChild(text);
+
+        }
+        
+      }
+
+      // console.dir(pathsList);
+
+      toolPath = Math.hypot( pathsList[0][0].x , pathsList[0][0].y );
+
+      // Get Tool path lenght between drawing.
+      pathsList.forEach( (pathCoords, i) => {
+        
+        if ( i < pathsList.length - 1) {
+
+          // console.log(i);
+          toolPath += Math.hypot( pathCoords[1].x - pathsList[i+1][0].x, pathCoords[1].y - pathsList[i+1][0].y);
+
+        } else {
+          toolPath += Math.hypot( pathCoords[1].x, pathCoords[1].y );
+
+        }
+
+
+      });
+
+      console.log("Unoptimized ToolPath is: "+ toolPath);
+
+      var pathToCheck = 0;
+
+      pathsOrder.push( getMeNearestPoint( {x: 0, y:150000}, startPoints ));
+
+      pathToCheck = pathsOrder[0];
+      
+      startPoints.splice(pathToCheck,1);
+
+      for (let i = 0; ((i < endPoints.length) && (startPoints.length > 0)); i++) {
+
+        pathToCheck = getMeNearestPoint(endPoints[pathToCheck], startPoints);
+        
+        pathsOrder.push( pathToCheck );
+        startPoints = startPoints.filter(startPoint => startPoint.pathIndex != pathToCheck);
+
+      }
+
+      toolPath = Math.hypot( pathsList[0][0].x , pathsList[0][0].y );
+
+      // Get Tool path lenght between drawing.
+      pathsOrder.forEach( (pathIndex, i) => {
+
+        pathOrdered = pathsList[pathIndex];
+        
+        if ( i < pathsList.length - 1) {
+
+          // console.log(i);
+          toolPath += Math.hypot( pathOrdered[1].x - pathsList[pathsOrder[i+1]][0].x, pathOrdered[1].y - pathsList[pathsOrder[i+1]][0].y);
+
+        } else {
+
+          toolPath += Math.hypot( pathOrdered[1].x, pathOrdered[1].y );
+
+        }
+
+
+      });
+
+      // console.log("Optimized ToolPath is: "+ toolPath);
+
+
+  }
+  
+  function transformPoint( point, transformations ) {
+    
+    if ( transformations ) {
+      
+      return point.matrixTransform(transformations);
+      
+    }
+    
+    return point;
+
+  }
+
+  function getMeNearestPoint( basePoint, points ) {
+
+    var pointDistanceLow = Math.hypot( basePoint.x - points[0].x,  basePoint.y - points[0].y );
+    var y = 0;
+
+    points.forEach( (point, i) => {
+
+      var pointDistance = Math.hypot( basePoint.x - point.x,  basePoint.y - point.y );
+      // console.log(point.x + point.y);
+      // console.log(pointDistance);
+
+      if ( pointDistance < pointDistanceLow ) {
+        pointDistanceLow = pointDistance;
+        // console.log("for index: "+ i + " lowest is "+pointDistanceLow);
+        y = points[i].pathIndex;
+      }
+
+    });
+
+    return y;
+
+  }
+
+  function generateGcode() {
+
+    const svgCont = document.getElementsByTagName("svg")[0];
+    const svgns = "http://www.w3.org/2000/svg"
+    const pointRadius = 1 * opts.scale;
+    
+    var gCodeList = [];
+
+    const yMirror = "+";
+    const xMirror = "-";
+
+    // Rounding constant, on how many dec numbers we should round.
+    const rndConst = 100;
+
+    var coordinates = [];
+
+    document.querySelectorAll('.nodePoint').forEach(e => e.remove());
+
+    gCodeList.push({S: "G21"});
+    gCodeList.push({S: "G90"});
+    gCodeList.push({S: "G1", Z:opts.zClearance, F:opts.feedRate});
+    gCodeList.push({S: "G1", F:opts.feedRate}); // X:0, Y:0,
+    
+    var paths = document.getElementsByTagName("path");
+
+    if (paths.length == 0) {
+        paths = document.getElementsByTagName("line");
+    }
+    
+    console.log(paths.length +" paths found");
+
+    statusLabel.innerHTML = paths.length +" paths found";
+
+    // For each path
+    for (var i = 0; i < paths.length; i++) {
+
+      
+      // statusLabel.innerHTML = "finished " +i+ " from " +  paths.length;
+      
+      if (useOptimizer) {
+        
+        var path = paths[pathsOrder[i]];
+        
+      } else {
+        
+        var path = paths[i];
+        
+      }
+
+      var parentTransformation = false;
+
+      if ( path.parentElement.hasAttribute("transform") ) {
+
+        parentTransformation = path.parentElement.transform.animVal[0].matrix;
+
+      }
+      
+      const pathLen = path.getTotalLength();
+
+      console.log(i + " path is "+pathLen+ "px long and will have " + pathLen/(opts.pathDiv*opts.scale) + " points");
+
+      gCodeList.push({S: "G1", Z:opts.zClearance});
+
+      gCodeList.push({S: "G1", X: transformPoint( path.getPointAtLength(0), parentTransformation ).x, Y: transformPoint( path.getPointAtLength(0), parentTransformation ).y});
+
+      if (showGpoints) {
+
+        placeDebugPoint(svgCont, transformPoint( path.getPointAtLength(0), parentTransformation ), pointRadius);
+
+      }
+
+      gCodeList.push({S: "G1", Z:opts.zCutDepth});
+
+      for (var distance = opts.pathDiv*opts.scale; distance < pathLen; distance += opts.pathDiv*opts.scale) {
+
+        var pointAtDist = transformPoint( path.getPointAtLength(distance), parentTransformation );
+        var nextPointAtDist = transformPoint( path.getPointAtLength(distance + opts.pathDiv*opts.scale), parentTransformation );
+
+        var xDelta = Math.abs(Math.abs(pointAtDist.x)-Math.abs(nextPointAtDist.x));
+        var yDelta = Math.abs(Math.abs(pointAtDist.y)-Math.abs(nextPointAtDist.y));
+        
+        var lenDelta = Math.sqrt(xDelta*xDelta + yDelta*yDelta);
+        // console.log(lenDelta);
+
+        // Detect if the next point of path is not connected to the path
+        if ( lenDelta > opts.pathDiv * opts.scale * 2  ) {
+          // console.log("kudna");
+          gCodeList.push({S: "G1", Z:opts.zClearance });
+
+          gCodeList.push({S: "G1", X:nextPointAtDist.x, Y:nextPointAtDist.y});
+          
+          if (showGpoints) {
+
+            placeDebugPoint(svgCont, nextPointAtDist, pointRadius);
+            
+          }
+
+          gCodeList.push({S: "G1", Z:opts.zCutDepth });
+
+
+        } else {
+
+          gCodeList.push({S: "G1", X:pointAtDist.x, Y:pointAtDist.y});
+
+          if (showGpoints) {
+
+            placeDebugPoint(svgCont, pointAtDist, pointRadius);
+            
+          }
+
+        }
+        
+        
+      }
+
+      gCodeList.push({S: "G1", X: transformPoint( path.getPointAtLength(pathLen), parentTransformation ).x, Y: transformPoint( path.getPointAtLength(pathLen), parentTransformation ).y});
+  
+      if (showGpoints) {
+
+        placeDebugPoint(svgCont, transformPoint( path.getPointAtLength(pathLen), parentTransformation ), pointRadius);
+              
+      }
+
+    }
+
+    gCodeList.push({S: "G1", Z:opts.zClearance, F:opts.feedRate});
+    gCodeList.push({S: "G1", F:opts.feedRate}); // X:0, Y:0,
+    gCodeList.push({S: "M2"});
+
+    gCodeList = scaleCoordinates(gCodeList);
+
+    gCodeList = changeCoordinates(gCodeList);
+
+    return strigyfyGcode(gCodeList);
+  }
+
+  function placeDebugPoint(_svgCont, pos, _radius) {
+    
+    const svgns = "http://www.w3.org/2000/svg";
+
+    var _circle = document.createElementNS(svgns, 'circle');
+      _circle.setAttributeNS(null, 'cx', pos.x);
+      _circle.setAttributeNS(null, 'cy', pos.y);
+      _circle.setAttributeNS(null, 'r', _radius/2);
+      _circle.setAttributeNS(null, 'style', 'fill: yellow; stroke: none;' );
+      _circle.setAttributeNS(null, 'class', 'nodePoint' );
+      _svgCont.appendChild(_circle);
+
+  }
+
+  function scaleCoordinates( _gCodeList ){
+
+    
+    _gCodeList.forEach(line => {
+
+      for (const value in line) {
+
+        if (value == "X" || value == "Y") {
+
+          line[value] = line[value] / opts.scale ;
+          
+        } 
+
+      }
+      
+    });
+
+    return _gCodeList;
+  }
+
+  // function placeDebugPoint(position, color) {
+    
+  //   const pointRadius = 1 * opts.scale;
+
+  //   const svgns = "http://www.w3.org/2000/svg";
+
+  //   const svgCont = document.getElementsByTagName("svg")[0];
+    
+  //   const circle = document.createElementNS(svgns, 'circle');
+
+  //   circle.setAttributeNS(null, 'cx', position.x);
+  //   circle.setAttributeNS(null, 'cy', position.y);
+  //   circle.setAttributeNS(null, 'r', pointRadius/2);
+  //   circle.setAttributeNS(null, 'style', 'fill: '+color+'; stroke: none;' );
+  //   circle.setAttributeNS(null, 'class', 'nodePoint' );
+
+  //   svgCont.appendChild(circle);
+
+  // }
+
+
+  function changeCoordinates( _gCodeList ){
+
+    const shift = "Y";
+
+    const svgElement = document.getElementsByTagName("svg")[0];
+    const box = svgElement.viewBox.baseVal;
+    
+    var svgWidth = box.width;
+    var svgHeight = box.height;
+
+    if (svgWidth == 0) {
+      svgWidth = svgElement.getBBox().width;
+    }
+
+    if (svgHeight == 0) {
+      svgHeight = svgElement.getBBox().height;
+    }
+
+    xBox = svgWidth/opts.scale;
+    yBox = svgHeight/opts.scale;
+
+    _gCodeList.forEach(line => {
+
+      for (const value in line) {
+
+        if (value == shift) {
+
+          if ( !(line["Y"] == 0 && line["X"] == 0) ) {
+
+            line[value] = line[value] - yBox;
+
+          }
+          
+        } 
+
+      }
+      
+    });
+
+    return _gCodeList;
+  }
+
+  function strigyfyGcode( _gCodeList ){
+
+    const rndConst = 100;
+    
+    var gcodeString = "";
+
+    _gCodeList.forEach(line => {
+
+      for (const value in line) {
+
+        if (value == "S") {
+
+          gcodeString+= line[value] + " ";
+          
+        } else {
+          
+          gcodeString+= value + Math.round( line[value] * rndConst ) / rndConst + " ";
+
+        }
+      }
+
+      gcodeString+="\n";
+
+    });
+
+    return gcodeString;
+  }
+
+  function changeParameters( event ) {
+    opts[event.target.name] = parseFloat(event.target.value);
+  }
+
+  function udpateCheckboxParam( event ) {
+    
+  }
+
+  function updatePreset( event ) {
+
+    const presetName = event.target.options[event.target.options.selectedIndex].label;
+
+    if ( presetName == "Inkscape" ) {
+      // opts.scale = 1;
+      opts.yShift = 150;
+    } else if ( presetName == "Corel" ) {
+      // opts.scale = 1000;
+      opts.yShift = 150;
+    }
+
+    updateParametrInputs();
+
+  }
+
+  function updateParametrInputs() {
+
+    document.getElementById('scaleInput').value = opts.scale;
+    document.getElementById('pathDivInput').value = opts.pathDiv;
+    document.getElementById('yShiftInput').value = opts.yShift;
+    document.getElementById('zClearanceInput').value = opts.zClearance;
+    document.getElementById('zCutDepthInput').value = opts.zCutDepth;
+    document.getElementById('feedRateInput').value = opts.feedRate;
+    
+
+  }
+
+  function convertPolyToPath(poly){
+        var svgNS = poly.ownerSVGElement.namespaceURI;
+        var path = document.createElementNS(svgNS,'path');
+        var pathdata = 'M '+poly.getAttribute('points');
+        if (poly.tagName=='polygon') pathdata+='z';
+        path.setAttribute('d',pathdata);
+        poly.getAttributeNames().forEach(function(name){
+          if(name !== 'points')
+            path.setAttribute(name, poly.getAttribute(name))
+        })
+        poly.parentNode.replaceChild(path,poly);
+      }
+
+
+  const fileSelector = document.getElementById('file-selector');
+
+  fileSelector.addEventListener('change', (event) => {
+    const fileList = event.target.files;
+    var svgCont = document.getElementById('svgContainer');
+    fileList[0].text().then(text => {
+      svgCont.innerHTML = text; 
+      
+      // Convert Polygon, Polyline to paths
+      var polys = document.querySelectorAll('polygon,polyline');
+      [].forEach.call(polys,convertPolyToPath);
+      
+      getBasicSVGinfo();
+
+      analyzePaths();
+    });
+    fileName = fileList[0].name;
+
+
+  });
+
+</script>
