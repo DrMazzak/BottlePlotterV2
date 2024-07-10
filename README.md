@@ -5,7 +5,7 @@ Offical HomePage https://bottleplotter.cz
 
 Blog post describing its creation https://vgnotepad.blogspot.com/2024/04/bottle-plotter.html
 
-Offical Discord server to get help or just show off your prints https://discord.gg/zZ26gJUf
+Offical Discord server to get help or just show off your prints https://discord.gg/8kANXu6b5D
 
 ![MakerFair24 Prague](https://bottleplotter.cz/mf24.jpg)
 
